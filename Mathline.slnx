@@ -1,3 +1,4 @@
 <Solution>
   <Project Path="Mathline/Mathline.csproj" />
+  <Project Path="Tests/Tests.csproj" Id="c18f4329-4492-47c8-a799-28a3dd69c1c6" />
 </Solution>
