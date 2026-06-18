@@ -1,5 +1,52 @@
 ﻿@page "/"
+@using Core.Models
+@using Core.Solving
 
-<h1>Hello, world!</h1>
+<h1>Mathline</h1>
+<p>Enter a linear equation in the form <em>ax + b = c</em>:</p>
 
-Welcome to your new app.
+<div>
+    <input type="number" @bind="a" /> x +
+    <input type="number" @bind="b" /> =
+    <input type="number" @bind="c" />
+    <button @onclick="Solve">Solve</button>
+</div>
+
+@if (error is not null)
+{
+    <p style="color:red">@error</p>
+}
+
+@if (result is not null)
+{
+    <h3>This is a Linear Equation</h3>
+    <ol>
+        @foreach (var step in result.Steps)
+        {
+            <li>@step.Description: <strong>@step.Expression</strong></li>
+        }
+    </ol>
+    <p>Method: @result.Method</p>
+    <p><strong>x = @result.Solution.X</strong></p>
+}
+
+@code {
+    double a, b, c;
+    SolveResult<LinearEquationSolution>? result;
+    string? error;
+
+    void Solve()
+    {
+        error = null;
+        result = null;
+        try
+        {
+            var equation = new LinearEquation { A = a, B = b, C = c };
+            result = SolvingLogic.SolveLinearEquation(equation);
+        }
+        catch (ArgumentException ex)
+        {
+            error = ex.Message; // the a == 0 guard surfaces here
+        }
+    }
+}
