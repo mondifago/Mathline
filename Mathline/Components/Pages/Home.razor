@@ -1,52 +1,65 @@
 ﻿@page "/"
 @using Core.Models
+@using Core.Parsing
 @using Core.Solving
 
 <h1>Mathline</h1>
-<p>Enter a linear equation in the form <em>ax + b = c</em>:</p>
 
-<div>
-    <input type="number" @bind="a" /> x +
-    <input type="number" @bind="b" /> =
-    <input type="number" @bind="c" />
-    <button @onclick="Solve">Solve</button>
+<div class="solver">
+    <input @bind="input"
+           @bind:event="oninput"
+           @onkeyup="OnKeyUp"
+           placeholder="e.g. 3x + 5 = 14"
+           class="equation-input" />
+    <button @onclick="Solve" class="solve-button">Solve</button>
 </div>
 
 @if (error is not null)
 {
-    <p style="color:red">@error</p>
+    <p class="error">@error</p>
 }
-
-@if (result is not null)
+else if (result is not null)
 {
-    <h5>This is a Linear Equation</h5>
-    <ol>
-        @foreach (var step in result.Steps)
-        {
-            <li>@step.Description: <strong>@step.Expression</strong></li>
-        }
-    </ol>
-    <p>Method: @result.Method</p>
-    <p><strong>x = @result.Solution.X</strong></p>
+    <div class="result">
+        <ol>
+            @foreach (var step in result.Steps)
+            {
+                <li>
+                    <span class="step-description">@step.Description</span>
+                    <span class="step-expression">@step.Expression</span>
+                </li>
+            }
+        </ol>
+        <p class="method">Method: @result.Method</p>
+        <p class="solution">x = @result.Solution.X</p>
+    </div>
 }
 
 @code {
-    double a, b, c;
-    SolveResult<LinearEquationSolution>? result;
-    string? error;
+    private string input = "";
+    private SolveResult<LinearEquationSolution>? result;
+    private string? error;
 
-    void Solve()
+    private void Solve()
     {
-        error = null;
-        result = null;
         try
         {
-            var equation = new LinearEquation { A = a, B = b, C = c };
+            var tokens = Tokenizer.Tokenize(input);
+            var terms = TermCollector.Collect(tokens);
+            var equation = LinearBuilder.Build(terms);
             result = SolvingLogic.SolveLinearEquation(equation);
+            error = null;
         }
-        catch (ArgumentException ex)
+        catch (Exception ex) when (ex is FormatException or ArgumentException)
         {
-            error = ex.Message; // the a == 0 guard surfaces here
+            result = null;
+            error = ex.Message;
         }
+    }
+
+    private void OnKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            Solve();
     }
 }
