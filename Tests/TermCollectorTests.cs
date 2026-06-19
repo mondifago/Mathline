@@ -70,5 +70,58 @@ namespace Tests
         {
             Assert.Throws<FormatException>(() => Collect(input));
         }
+
+        [Fact]
+        public void ReadsSquaredTerm()
+        {
+            var terms = Collect("x^2 - 5x + 6 = 0");
+
+            Assert.Equal(1, terms.Left.GetValueOrDefault("x^2"));
+            Assert.Equal(-5, terms.Left.GetValueOrDefault("x"));
+            Assert.Equal(6, terms.Left.GetValueOrDefault("1"));
+        }
+
+        [Fact]
+        public void ReadsCoefficientOnSquaredTerm()
+        {
+            var terms = Collect("3x^2 = 12");
+
+            Assert.Equal(3, terms.Left.GetValueOrDefault("x^2"));
+            Assert.Equal(12, terms.Right.GetValueOrDefault("1"));
+        }
+
+        [Fact]
+        public void NegativeSquaredTerm()
+        {
+            var terms = Collect("-x^2 + 4 = 0");
+
+            Assert.Equal(-1, terms.Left.GetValueOrDefault("x^2"));
+            Assert.Equal(4, terms.Left.GetValueOrDefault("1"));
+        }
+
+        [Fact]
+        public void PowerOneCollapsesToBareVariable()
+        {
+            var terms = Collect("x^1 = 5");
+
+            Assert.Equal(1, terms.Left.GetValueOrDefault("x"));
+            Assert.False(terms.Left.ContainsKey("x^1"));
+        }
+
+        [Fact]
+        public void CombinesSquaredLikeTerms()
+        {
+            var terms = Collect("2x^2 + 3x^2 = 5");
+
+            Assert.Equal(5, terms.Left.GetValueOrDefault("x^2"));
+        }
+
+        [Theory]
+        [InlineData("x^ = 5")]    
+        [InlineData("x^x = 5")]   
+        public void RejectsMalformedPower(string input)
+        {
+            Assert.Throws<FormatException>(() => Collect(input));
+        }
     }
 }

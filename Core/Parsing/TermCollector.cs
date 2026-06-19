@@ -64,20 +64,14 @@ namespace Core.Parsing
                     coefficient = ParseNumber(tokens[i]);
                     i++;
                     if (i < tokens.Count && tokens[i].Kind == TokenKind.Variable)
-                    {
-                        monomial = tokens[i].Text;
-                        i++;
-                    }
+                        monomial = ReadVariable(tokens, ref i);
                     else
-                    {
                         monomial = "1";
-                    }
                 }
                 else if (tokens[i].Kind == TokenKind.Variable)
                 {
                     coefficient = 1.0;
-                    monomial = tokens[i].Text;
-                    i++;
+                    monomial = ReadVariable(tokens, ref i);
                 }
                 else
                 {
@@ -97,6 +91,28 @@ namespace Core.Parsing
                 return value;
 
             throw new FormatException($"Invalid number '{token.Text}' at position {token.Position}.");
+        }
+
+        private static string ReadVariable(IReadOnlyList<Token> tokens, ref int i)
+        {
+            string name = tokens[i].Text;   
+            i++;
+
+            if (i < tokens.Count && tokens[i].Kind == TokenKind.Caret)
+            {
+                int caretPosition = tokens[i].Position;
+                i++;
+
+                if (i >= tokens.Count || tokens[i].Kind != TokenKind.Number)
+                    throw new FormatException($"Expected a power after '^' at position {caretPosition}.");
+
+                string power = tokens[i].Text;
+                i++;
+
+                return power == "1" ? name : $"{name}^{power}";
+            }
+
+            return name;
         }
     }
 }
