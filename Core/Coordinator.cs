@@ -13,7 +13,7 @@ namespace Core
     {
         public static SolveOutcome Solve(string input)
         {
-            var terms = TermCollector.Collect(Tokenizer.Tokenize(input));
+            var terms = TermCollector.Collect(Tokenizer.Tokenize(Preprocessor.Canonicalize(input)));
 
             return Detector.Detect(terms) switch
             {
