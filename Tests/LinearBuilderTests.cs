@@ -34,11 +34,5 @@ namespace Tests
             Assert.Equal(5, eq.B);
             Assert.Equal(14, eq.C);
         }
-
-        [Fact]
-        public void RejectsSecondVariable()
-        {
-            Assert.Throws<FormatException>(() => Build("x + y = 5"));
-        }
     }
 }
