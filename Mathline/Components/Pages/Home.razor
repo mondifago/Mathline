@@ -1,7 +1,6 @@
 ﻿@page "/"
-@using Core.Models
+@using Core
 @using Core.Parsing
-@using Core.Solving
 
 <h1>Mathline</h1>
 
@@ -9,7 +8,7 @@
     <input @bind="input"
            @bind:event="oninput"
            @onkeyup="OnKeyUp"
-           placeholder="e.g. 3x + 5 = 14"
+           placeholder="e.g. 3x + 5 = 14   or   x^2 - 5x + 6 = 0"
            class="equation-input" />
     <button @onclick="Solve" class="solve-button">Solve</button>
 </div>
@@ -18,11 +17,14 @@
 {
     <p class="error">@error</p>
 }
-else if (result is not null)
+else if (outcome is not null)
 {
     <div class="result">
+        <p class="equation-type">
+            @(outcome.Type == EquationType.Quadratic ? "Quadratic equation" : "Linear equation")
+        </p>
         <ol>
-            @foreach (var step in result.Steps)
+            @foreach (var step in outcome.Steps)
             {
                 <li>
                     <span class="step-description">@step.Description</span>
@@ -30,29 +32,25 @@ else if (result is not null)
                 </li>
             }
         </ol>
-        <p class="method">Method: @result.Method</p>
-        <p class="solution">x = @result.Solution.X</p>
+        <p class="method">Method: @outcome.Method</p>
     </div>
 }
 
 @code {
     private string input = "";
-    private SolveResult<LinearEquationSolution>? result;
+    private SolveOutcome? outcome;
     private string? error;
 
     private void Solve()
     {
         try
         {
-            var tokens = Tokenizer.Tokenize(input);
-            var terms = TermCollector.Collect(tokens);
-            var equation = LinearBuilder.Build(terms);
-            result = SolvingLogic.SolveLinearEquation(equation);
+            outcome = Coordinator.Solve(input);
             error = null;
         }
         catch (Exception ex) when (ex is FormatException or ArgumentException)
         {
-            result = null;
+            outcome = null;
             error = ex.Message;
         }
     }

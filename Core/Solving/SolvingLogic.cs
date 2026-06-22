@@ -83,7 +83,6 @@ namespace Core.Solving
             double sqrt = rootType == QuadraticRootType.NoRealRoots ? double.NaN : Math.Sqrt(discriminant);
 
             double x1, x2;
-
             if (rootType == QuadraticRootType.NoRealRoots)
             {
                 x1 = double.NaN;
@@ -104,11 +103,15 @@ namespace Core.Solving
                 RootType = rootType
             };
 
+            bool canFactor = IsPerfectSquare(discriminant);
+
             return new SolveResult<QuadraticEquationSolution>
             {
                 Solution = solution,
-                Steps = BuildQuadraticFormulaSteps(a, b, c, discriminant, sqrt, x1, x2, rootType),
-                Method = "Quadratic formula"
+                Steps = canFactor
+                    ? BuildFactoringSteps(a, b, c, x1, x2, rootType)
+                    : BuildQuadraticFormulaSteps(a, b, c, discriminant, sqrt, x1, x2, rootType),
+                Method = canFactor ? "Factorisation" : "Quadratic formula"
             };
         }
 
@@ -155,6 +158,37 @@ namespace Core.Solving
             return result;
         }
 
+        private static bool IsPerfectSquare(double discriminant)
+        {
+            if (discriminant < 0) return false;          // negative D → no real roots → can't factor
+            double root = Math.Sqrt(discriminant);
+            return root == Math.Floor(root);             // exact for integer coefficients (the school case)
+        }
+
+        private static List<SolutionStep> BuildFactoringSteps(
+    double a, double b, double c, double x1, double x2, QuadraticRootType rootType)
+        {
+            var steps = new List<SolutionStep>
+        {
+            new("Start with the equation", $"{FormatQuadratic(a, b, c)} = 0")
+        };
+
+            // Divide to monic form — a SHOWN step, never hidden (mirrors linear's "divide both sides").
+            if (a != 1)
+                steps.Add(new($"Divide both sides by {a}", $"{FormatQuadratic(1, b / a, c / a)} = 0"));
+
+            if (rootType == QuadraticRootType.Repeated)
+                steps.Add(new("Factor the left-hand side", $"{Factor(x1)}² = 0"));
+            else
+                steps.Add(new("Factor the left-hand side", $"{Factor(x1)}{Factor(x2)} = 0"));
+
+            return steps;
+        }
+
+        private static string Factor(double root) =>
+            root == 0 ? "x"
+            : root > 0 ? $"(x - {root})"
+            : $"(x + {Math.Abs(root)})";
         #endregion
     }
 }
