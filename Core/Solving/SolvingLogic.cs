@@ -190,5 +190,165 @@ namespace Core.Solving
             : root > 0 ? $"(x - {root})"
             : $"(x + {Math.Abs(root)})";
         #endregion
+
+        #region Simultaneous Equations
+        public static SolveResult<SimultaneousEquationSolution> SolveSimultaneousEquation(SimultaneousEquation equation)
+        {
+            double a1 = equation.A1, b1 = equation.B1, c1 = equation.C1;
+            double a2 = equation.A2, b2 = equation.B2, c2 = equation.C2;
+
+            double determinant = a1 * b2 - a2 * b1;
+
+            var steps = new List<SolutionStep>
+    {
+        new("Equation 1", $"{FormatTwoVar(a1, b1)} = {c1}"),
+        new("Equation 2", $"{FormatTwoVar(a2, b2)} = {c2}")
+    };
+
+            if (determinant == 0)
+            {
+                double dx = c1 * b2 - c2 * b1;
+                double dy = a1 * c2 - a2 * c1;
+
+                SimultaneousSolutionType degenerate;
+                if (dx == 0 && dy == 0)
+                {
+                    degenerate = SimultaneousSolutionType.InfinitelyMany;
+                    steps.Add(new("The two equations describe the same line", "infinitely many solutions"));
+                }
+                else
+                {
+                    degenerate = SimultaneousSolutionType.NoSolution;
+                    steps.Add(new("The two lines are parallel and never meet", "no solution"));
+                }
+
+                return new SolveResult<SimultaneousEquationSolution>
+                {
+                    Solution = new SimultaneousEquationSolution { SolutionType = degenerate },
+                    Steps = steps,
+                    Method = "Elimination"
+                };
+            }
+
+            double x, y;
+
+            if (a1 != 0 && a2 != 0)                 
+            {
+                y = Eliminate(a1, b1, c1, a2, b2, c2, "x", steps);
+                x = BackSubstitute(b1, a1, c1, "x", "y", y, 1, steps);
+            }
+            else if (b1 != 0 && b2 != 0)               
+            {
+                x = Eliminate(a1, b1, c1, a2, b2, c2, "y", steps);
+                y = BackSubstitute(a1, b1, c1, "y", "x", x, 1, steps);
+            }
+            else                                       
+            {
+                x = a1 != 0 ? SolveSingleVariable(a1, c1, "x", 1, steps)
+                            : SolveSingleVariable(a2, c2, "x", 2, steps);
+                y = b1 != 0 ? SolveSingleVariable(b1, c1, "y", 1, steps)
+                            : SolveSingleVariable(b2, c2, "y", 2, steps);
+            }
+
+            steps.Add(new("Solution", $"x = {x}, y = {y}"));
+
+            return new SolveResult<SimultaneousEquationSolution>
+            {
+                Solution = new SimultaneousEquationSolution { X = x, Y = y, SolutionType = SimultaneousSolutionType.Unique },
+                Steps = steps,
+                Method = "Elimination"
+            };
+        }
+
+        private static double Eliminate(
+            double a1, double b1, double c1,
+            double a2, double b2, double c2,
+            string eliminate, List<SolutionStep> steps)
+        {
+            double p1 = eliminate == "x" ? a1 : b1;
+            double p2 = eliminate == "x" ? a2 : b2;
+            double s1 = p2, s2 = p1;                      
+
+            double na1 = a1 * s1, nb1 = b1 * s1, nc1 = c1 * s1;
+            double na2 = a2 * s2, nb2 = b2 * s2, nc2 = c2 * s2;
+
+            if (s1 != 1)
+                steps.Add(new($"Multiply equation 1 by {s1}", $"{FormatTwoVar(na1, nb1)} = {nc1}"));
+            if (s2 != 1)
+                steps.Add(new($"Multiply equation 2 by {s2}", $"{FormatTwoVar(na2, nb2)} = {nc2}"));
+
+            string keep = eliminate == "x" ? "y" : "x";
+            double keptCoeff = eliminate == "x" ? nb1 - nb2 : na1 - na2;
+            double rhs = nc1 - nc2;
+
+            steps.Add(new($"Subtract the equations to eliminate {eliminate}", $"{TermXY(keptCoeff, keep)} = {rhs}"));
+
+            double value = rhs / keptCoeff;
+            steps.Add(new($"Solve for {keep}", $"{keep} = {value}"));
+            return value;
+        }
+
+        private static double BackSubstitute(
+            double keepCoeff, double solveCoeff, double rhs,
+            string solveFor, string knownName, double knownValue,
+            int eqNumber, List<SolutionStep> steps)
+        {
+            double knownTerm = keepCoeff * knownValue;
+
+            steps.Add(new($"Substitute {knownName} = {knownValue} into equation {eqNumber}",
+                $"{TermXY(solveCoeff, solveFor)}{Signed(knownTerm)} = {rhs}"));
+
+            double remaining = rhs - knownTerm;
+            if (knownTerm != 0)
+            {
+                steps.Add(new("Move the constant to the right-hand side",
+                    $"{TermXY(solveCoeff, solveFor)} = {rhs}{Signed(-knownTerm)}"));
+                steps.Add(new("Work out the right-hand side",
+                    $"{TermXY(solveCoeff, solveFor)} = {remaining}"));
+            }
+
+            double value = remaining / solveCoeff;
+            if (solveCoeff != 1)
+            {
+                steps.Add(new($"Divide both sides by {solveCoeff}", $"{solveFor} = {remaining}/{solveCoeff}"));
+                steps.Add(new($"Work out {solveFor}", $"{solveFor} = {value}"));
+            }
+            else
+            {
+                steps.Add(new($"Solve for {solveFor}", $"{solveFor} = {value}"));
+            }
+            return value;
+        }
+
+        private static double SolveSingleVariable(double coef, double rhs, string name, int eqNumber, List<SolutionStep> steps)
+        {
+            steps.Add(new($"Equation {eqNumber} contains only {name}", $"{TermXY(coef, name)} = {rhs}"));
+            double value = rhs / coef;
+            if (coef != 1)
+                steps.Add(new($"Divide both sides by {coef}", $"{name} = {rhs}/{coef}"));
+            steps.Add(new($"Work out {name}", $"{name} = {value}"));
+            return value;
+        }
+
+        private static string FormatTwoVar(double a, double b)
+        {
+            string left = a != 0 ? TermXY(a, "x") : "";
+            if (b == 0) return left == "" ? "0" : left;
+            if (left == "") return TermXY(b, "y");
+
+            double mag = Math.Abs(b);
+            string yTerm = mag == 1 ? "y" : $"{mag}y";
+            return left + (b > 0 ? " + " : " - ") + yTerm;
+        }
+
+        private static string TermXY(double coef, string name) =>
+            coef == 1 ? name : coef == -1 ? $"-{name}" : $"{coef}{name}";
+
+        private static string Signed(double v) =>
+            v == 0 ? "" : v > 0 ? $" + {v}" : $" - {Math.Abs(v)}";
+
+
+
+        #endregion
     }
 }
