@@ -1,0 +1,384 @@
+================================================================================
+MATHLINE — PROJECT PLAN
+
+--------------------------------------------------------------------------------
+1. OVERVIEW & PURPOSE
+--------------------------------------------------------------------------------
+Mathline is a cross-platform app (Windows/macOS desktop, Android/iOS mobile)
+built from a single .NET MAUI Blazor Hybrid codebase. A secondary-school student
+types an equation; the app identifies its type, solves it, shows every step of
+the working, and plots a graph.
+
+It doubles as a learning vehicle: .NET MAUI, desktop/mobile development, parsing,
+testing, and persistence and APIs.
+
+--------------------------------------------------------------------------------
+2. SCOPE
+--------------------------------------------------------------------------------
+Guiding principle — built to extend, but not over-built. Structure and seams are
+laid so new equation types, input mechanisms, and sub-projects can be added
+later WITHOUT reworking existing code.
+
+In scope (core build):
+- Secondary-school maths only.
+- Three equation families: linear, quadratic, simultaneous (two-variable).
+- Automatic detection of the equation type from the typed equation.
+- ONE best-suited method per situation, chosen by a mathematical property
+  (discriminant / determinant), then provide options of alternative methods if exists."
+- Step-by-step working shown.
+- Graph plotting with solution point(s) marked.
+- A local database to save and review past solutions.
+- Equation entry by typing, designed to evolve toward richer input later.
+- Single Blazor Hybrid MAUI codebase across all four platforms.
+- Solution/folder structure laid out up front to take tests, CI/CD, and future
+  additions without reorganising.
+
+Parked — designed for, built later:
+- Camera/OCR scanning of equations (mobile). Enters at the same string seam.
+- Optional backend Web API that reuses Core (the API learning goal).
+- Custom on-screen maths keypad (better mobile input).
+
+Out of scope (until/unless production):
+- User accounts, cloud sync, multi-user.
+- Higher maths: calculus, 3+ variable systems, matrices beyond 2×2.
+- Complex/imaginary roots — report "no real solutions," standard at this level.
+
+Explicitly dropped from earlier plans:- WILL BE CONSIDERED LATER
+- The "implement every method per type and offer alternatives" feature.
+- A method interface/base class and a separate Selector class.
+- Completing the square (it is the quadratic formula's sibling; redundant)
+
+--------------------------------------------------------------------------------
+3. ARCHITECTURE & TECH STACK
+--------------------------------------------------------------------------------
+Framework     .NET MAUI Blazor Hybrid, on .NET 10
+Language      C# (logic); Razor/HTML/CSS (UI); a little JavaScript (graph interop)
+UI styling    Bootstrap
+Graphing      function-plot via JS interop
+Persistence   SQLite with EF Core
+Testing       xUnit
+CI/CD         GitHub Actions
+Source        Git / GitHub
+
+Project responsibilities:
+- Core     The engine. Holds all models, parsing,
+           solving, and the coordinator entry point.
+- Mathline The MAUI Blazor Hybrid app — the ONLY project that knows about MAUI,
+           Blazor, and platforms. Calls Core through the Coordinator only.
+- Tests    xUnit. References Core. Runs in CI later.
+- Data     Persistence only, kept separate so Core stays database-free
+           and a future API can reuse Core without dragging persistence along.
+- (future) Api would reference Core (+ Data); the structure leaves the seat open.
+
+EF Core note for later: dotnet ef wants a buildable "startup project," and the
+multi-targeting MAUI app is awkward there. Add a design-time DbContext factory
+(IDesignTimeDbContextFactory) inside Data so migrations run against Data directly.
+Reference Microsoft.EntityFrameworkCore.Design and use the dotnet-ef tool.
+
+--------------------------------------------------------------------------------
+4. CURRENT FOLDER / SOLUTION STRUCTURE
+--------------------------------------------------------------------------------
+Mathline/
+├── Mathline.slnx
+├── .gitattributes / .gitignore / README.md
+│
+├── Mathline/                          MAUI Blazor Hybrid app
+│   ├── Components/
+│   │   ├── Pages/
+│   │   │   ├── Home.razor
+│   │   │   └── NotFound.razor
+│   │   ├── Layout/  (MainLayout, NavMenu)
+│   │   ├── Routes.razor
+│   │   └── _Imports.razor
+│   ├── Platforms/ (Android, iOS, MacCatalyst, Windows)
+│   ├── Resources/ , wwwroot/ (app.css, bootstrap)
+│   └── MauiProgram.cs , App.xaml , MainPage.xaml
+│
+├── Core/                              the engine;
+│   ├── Models/
+│   │   ├── TokenKind.cs               TokenKind enum + Token record
+│   │   ├── EquationTerms.cs           { Left bag, Right bag }  (monomial→coeff)
+│   │   ├── EquationType.cs            Linear | Quadratic | Simultaneous
+│   │   ├── LinearEquation.cs
+│   │   ├── LinearEquationSolution.cs
+│   │   ├── QuadraticEquation.cs
+│   │   ├── QuadraticEquationSolution.cs
+│   │   │
+│   │   ├── QuadraticRootType.cs
+│   │   ├── SimultaneousEquation.cs
+│   │   ├── SimultaneousEquationSolution.cs
+│   │   ├── SimultaneousSolutionType.cs
+│   │   ├── SolutionStep.cs
+│   │   └── SolveResult.cs
+│   │
+│   ├── Parsing/                       raw text → typed equation
+│   │   ├── Preprocessor.cs            canonicalise unicode symbols
+│   │   ├── Splitter.cs                input → list of equation strings
+│   │   ├── Tokenizer.cs               string → tokens
+│   │   ├── TermCollector.cs           tokens → EquationTerms  (THE seam)
+│   │   ├── Detector.cs                type classification + system validation
+│   │   ├── LinearBuilder.cs          EquationTerms → LinearEquation
+│   │   ├── QuadraticBuilder.cs       EquationTerms → QuadraticEquation
+│   │   └── SimultaneousBuilder.cs    2×EquationTerms → SimultaneousEquation
+│   │
+│   ├── Solving/
+│   │   └── SolvingLogic.cs            ALL solving logic
+│   │
+│   └── Coordination/
+│       └── Coordinator.cs            entry point: Solve(string)→SolveOutcome
+│
+│
+├── Tests/
+│   ├── TokenizerTests / TermCollectorTests / PreprocessorTests / SplitterTests
+│   ├── DetectorTests
+│   ├── LinearBuilderTests / LinearSolvingTests
+│   ├── QuadraticBuilderTests / QuadraticSolvingTests
+│   ├── SimultaneousBuilderTests / SimultaneousSolvingTests
+│   └── CoordinatorTests
+│
+├── Core/Graphing/                    graph-data builder
+├── Data/                             EF Core + SQLite (separate project)
+├── docs/                             project plan, learning notes, diagrams
+└── .github/workflows/build-and-test.yml   CI/CD (GitHub Actions)
+
+
+--------------------------------------------------------------------------------
+5. THE CORE ENGINE — COMPONENT GROUPS
+--------------------------------------------------------------------------------
+Four groups, each with one job, talking to each other only through Models.
+
+Models          The data classes, enums, and records. No behaviour. Every other
+                group reads and writes these and nothing else.
+
+Parsing         Turns raw text into a typed equation object. Holds the whole
+                input pipeline: Preprocessor, Splitter, Tokenizer, TermCollector,
+                Detector, and the three Builders.
+
+Solving         SolvingLogic.cs — the maths engine, and the single source of
+                truth for solving. Every algorithm for every type lives here.
+ 
+Coordination    Coordinator.cs — the one public surface the UI calls. Runs the
+                pipeline, forks on equation count, and returns a SolveOutcome.
+                The UI knows only the Coordinator and the Models.
+
+--------------------------------------------------------------------------------
+6. DETAILED DATA FLOW
+--------------------------------------------------------------------------------
+USER INPUT  (textarea; Enter = new line; solving is by the Solve button only)
+
+   one equation                    a system (one equation per line)
+   "x^2 - 5x + 6 = 0"              "2x + y = 7"
+                                   "x - y = 2"
+        │
+        ▼
+[ Splitter ]  split on newline → list of equation strings (blank lines dropped)
+        │
+        │   Coordinator forks on COUNT:  0 → error   3+ → error
+        ▼
+┌─────────────────────────── 1 equation ────────────────────────────┐
+│ [ Preprocessor ] canonicalise:  ² → ^2,  × → *,  − – — → -,  ÷ → /
+│        ▼
+│ [ Tokenizer ]      string → token list
+│        ▼
+│ [ TermCollector ]  tokens → EquationTerms { Left bag, Right bag }
+│        ▼           (monomial→coeff; resolves signs & implicit ×)
+│ [ Detector.Detect ]  classify on NET coefficients (Left − Right):
+│        │   net x^2 ≠ 0 ............................. Quadratic
+│        │   net x^2 = 0 AND net x ≠ 0 .............. Linear
+│        │   net x^2 = 0 AND net x = 0 .............. no variable→err
+│        │   foreign monomial (y, x^3 …) net ≠ 0 .... unsupported→err
+│        ▼
+│ switch(type)
+│   ├ Linear ───►[ LinearBuilder ]───► LinearEquation {A,B,C}
+│   │                       └► SolvingLogic.SolveLinearEquation
+│   └ Quadratic►[ QuadraticBuilder ]─► QuadraticEquation {A,B,C}
+│                           └► SolvingLogic.SolveQuadraticEquation
+└───────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────── 2 equations ───────────────────────────┐
+│ each equation:  Preprocessor → Tokenizer → TermCollector
+│        ▼
+│ [ Detector.ValidateLinearSystem ]  allow {1, x, y} only;
+│        │   require BOTH x and y present; reject x^2, z, etc.
+│        ▼
+│ [ SimultaneousBuilder ] → SimultaneousEquation {A1,B1,C1,A2,B2,C2}
+│        └► SolvingLogic.SolveSimultaneousEquation
+└───────────────────────────────────────────────────────────────────┘
+        │
+        ▼
+[ SolvingLogic ]  ALL solving lives here:
+   Linear        "Rearrangement" — transpose, divide; every step shown.
+   Quadratic     discriminant D decides BOTH the outcome AND the method:
+                   D a perfect square → "Factorisation"
+                       → (x - r1)(x - r2) = 0  (non-monic: divide-through shown)
+                   D not a perfect square → "Quadratic formula" → decimal roots
+                   D < 0 → no real roots
+                 RootType ∈ { TwoDistinct, Repeated, NoRealRoots }
+   Simultaneous  "Elimination"; determinant D = a1·b2 − a2·b1 decides:
+                   D ≠ 0 → Unique (x, y)
+                   D = 0 → NoSolution (parallel) | InfinitelyMany (same line)
+        │
+        ▼
+SolveResult<T> { Solution, Steps, Method }
+        │
+        ▼
+[ Coordinator ]  wraps as → SolveOutcome { Type, Method, Steps }
+        │
+        ▼
+UI renders: the type label, the ordered Steps, and the Method name.
+
+--------------------------------------------------------------------------------
+7. CLASS MODEL (Models)
+--------------------------------------------------------------------------------
+Parsing/token contracts
+  TokenKind (enum)  Number, Variable, Plus, Minus, Star, Caret, Equals
+  Token (record)    Kind, Text, Position
+  EquationTerms     Left, Right  — each a dictionary monomial→coefficient,
+                                   where "1"=constant, "x", "x^2", "y"
+
+Equation models
+  LinearEquation        A, B, C            (ax + b = c)
+  QuadraticEquation     A, B, C            (ax² + bx + c = 0)
+  SimultaneousEquation  A1, B1, C1, A2, B2, C2   (a1x+b1y=c1 ; a2x+b2y=c2)
+
+Solution models
+  LinearEquationSolution        X
+  QuadraticEquationSolution     Discriminant, SquareRootOfDiscriminant,
+                                X1, X2, RootType
+  SimultaneousEquationSolution  X, Y, SolutionType
+
+Outcome enums (make degenerate cases explicit, not inferred)
+  QuadraticRootType        TwoDistinct | Repeated | NoRealRoots
+  SimultaneousSolutionType Unique | NoSolution | InfinitelyMany
+  EquationType             Linear | Quadratic | Simultaneous
+
+Result / step / output
+  SolutionStep         Description, Expression
+  SolveResult<T>       Solution, Steps, Method
+  SolveOutcome         Type, Method, Steps   (defined in Coordination; the UI view)
+
+Graph-data models
+  GraphData    shape
+  PlotFunction Expression (e.g. "x^2 - 5*x + 6")
+  PlotPoint    X, Y, Label (solution points to mark)
+  ViewWindow   XMin, XMax, YMin, YMax
+
+--------------------------------------------------------------------------------
+8. DESIGN PRINCIPLES & KEY DECISIONS
+--------------------------------------------------------------------------------
+1.  SolvingLogic is the single source of truth. Every bit of equation-solving
+    maths lives in Core/Solving/SolvingLogic.cs and nowhere else.
+
+2.  No shared base classes or interfaces across equation types OR across solving
+    methods. A method-interface + selector was considered and rejected. Choosing
+    a method within a type is a simple internal branch on a mathematical property
+    (discriminant for quadratic, determinant for simultaneous). Abstractions are
+    introduced only on demonstrated need.
+
+3.  Detector owns type classification of a single equation. The Coordinator owns
+    the one-vs-two-equation fork (a structural count, not a "type"). The Detector
+    also validates that a two-equation set is a well-formed linear system.
+
+4.  Builders are pure extractors: net the coefficient bag into an equation object,
+    nothing else. No validation (that is the Detector's), no maths manipulation
+    (that is the solver's, and it is shown as steps).
+
+5.  No hidden steps. Every manipulation a student should see is an explicit step:
+    transpose then divide (linear); divide-through to monic before factorising;
+    scale-and-subtract then back-substitute (elimination). Pinned by step tests.
+
+6.  Classify on NET coefficients (Left − Right). Cancellation
+    (x² + 3x = x² + 5 → linear) and explicit zeros (0x² … → linear) both resolve
+    correctly because of this.
+
+7.  The coefficient bag (monomial → coefficient) is the seam. Keying by string
+    monomial ("1","x","x^2","y") lets one tokenizer + collector serve all three
+    types and reserves room for more without rewrites.
+
+8.  Linear preserves the user's layout (B stays left, C stays right) so the first
+    step echoes the typed equation. Quadratic and simultaneous normalise to
+    standard form because their methods require aligned coefficients.
+
+9.  Input is a plain string at the very top; the Preprocessor canonicalises
+    unicode. This is the exact seam OCR will use later — no downstream change.
+
+10. Equation models use plain doubles; outcome enums make degenerate cases
+    explicit rather than leaving NaN/sign to be interpreted.
+
+11. Incremental, test-first: each piece is built, tested, and committed before
+    the next. Tests are value-based where possible; exact-string step tests are
+    used sparingly and only to enforce "no hidden steps."
+
+--------------------------------------------------------------------------------
+9. WHAT IS DONE
+--------------------------------------------------------------------------------
+Phase 1 — Linear, end to end: full pipeline (Preprocessor, Tokenizer,
+          TermCollector, Detector, LinearBuilder), SolvingLogic linear solver,
+          single-input UI. Tested.
+Phase 2 — Quadratic: caret/power handling in the collector, Detector extended,
+          QuadraticBuilder, SolvingLogic quadratic solver. Method chosen by the
+          discriminant — factorisation when D is a perfect square (factored form
+          as the final line; divide-through shown for non-monic), otherwise the
+          quadratic formula. Coordinator + count-ready dispatch. Tested.
+Phase 3 — Simultaneous (2-variable linear): Splitter, SimultaneousBuilder,
+          SolvingLogic elimination solver with determinant-based outcome,
+          Detector system-validation, Coordinator count-fork, textarea UI
+          (Enter = new line; Solve by button only). Tested.
+
+Result: one input box, three equation types auto-detected and routed, full
+step-by-step working for each, every solver in SolvingLogic, no shared base
+classes, and a parser foundation that already carries all three types plus the
+OCR seam.
+
+--------------------------------------------------------------------------------
+10. WHAT IS LEFT (in order)
+--------------------------------------------------------------------------------
+A. UI OUTLOOK PASS  (before graphing — a design decision step)
+   - Decide overall layout and how the screen is sectioned.
+   - Decide whether to keep or remove the nav/menu bar (leaning remove).
+   - Remove leftover template scaffolding (Counter.razor, Weather.razor,
+     template MainLayout/NavMenu chrome).
+   - Decide where the graph lives on screen.
+   - Decide where users browse/fetch past solutions.
+   - Decide what other menus/sections exist and where they sit.
+
+B. GRAPHING
+   - function-plot via JS interop; plot y = f(x) and mark solution point(s).
+   - Add Core/Graphing/ (a graph-data builder) producing the plot expression(s)
+     and points, kept decoupled from the solver.
+   - Finalise the graph-data models (GraphData, PlotFunction, PlotPoint,
+     ViewWindow).
+
+C. DATABASE
+   - EF Core + SQLite in a separate Data project; save and review past solutions.
+   - IDesignTimeDbContextFactory so migrations run without the MAUI app.
+
+D. LATER / PARKED
+   - CI/CD: GitHub Actions build-and-test workflow.
+   - Backend Web API reusing Core (+ Data) — the API learning goal.
+   - OCR/camera input (mobile), entering at the string seam.
+   - Custom on-screen maths keypad.
+
+--------------------------------------------------------------------------------
+11. DEFERRED REFINEMENTS (cross-cutting; flagged during the build)
+--------------------------------------------------------------------------------
+- Decimal display rounding. Highest value. Roots/answers currently render as raw
+  doubles (e.g. 2.3333333333). Affects linear, quadratic, and simultaneous step
+  output. PRECISION NOT YET CHOSEN — decide a number of decimal places and apply
+  it in one pass across all three solvers.
+- Tolerance for "== 0" checks (discriminant, determinant, perfect-square test).
+  Exact comparison is reliable for the integer coefficients of school problems;
+  add a small tolerance if decimal inputs ever land a hair off zero.
+- LCM-minimised multipliers in elimination. Currently each equation is scaled by
+  the other's coefficient — always correct, but produces larger numbers than an
+  LCM-based multiplier would.
+- Error positions reference the canonicalised string, so a reported column can be
+  slightly off from what the user typed (cosmetic; superscript expands one char
+  to two).
+- Optional pedagogical extra: after the factored form (x - r1)(x - r2) = 0, show
+  the zero-product conclusion (x = r1, x = r2). Currently the factored form is
+  the final line, by deliberate choice.
+
+================================================================================
+END OF PLAN
+================================================================================
