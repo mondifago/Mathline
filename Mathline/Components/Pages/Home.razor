@@ -1,15 +1,15 @@
 ﻿@page "/"
-@using Core
+@using Core.Coordination
 @using Core.Models
 
 <h1>Mathline</h1>
 
 <div class="solver">
-    <input @bind="input"
-           @bind:event="oninput"
-           @onkeyup="OnKeyUp"
-           placeholder="e.g. 3x + 5 = 14   or   x^2 - 5x + 6 = 0"
-           class="equation-input" />
+    <textarea @bind="input"
+              @bind:event="oninput"
+              rows="2"
+              placeholder=""
+              class="equation-input"></textarea>
     <button @onclick="Solve" class="solve-button">Solve</button>
 </div>
 
@@ -20,9 +20,7 @@
 else if (outcome is not null)
 {
     <div class="result">
-        <p class="equation-type">
-            @(outcome.Type == EquationType.Quadratic ? "Quadratic equation" : "Linear equation")
-        </p>
+        <p class="equation-type">@TypeLabel(outcome.Type)</p>
         <ol>
             @foreach (var step in outcome.Steps)
             {
@@ -55,9 +53,11 @@ else if (outcome is not null)
         }
     }
 
-    private void OnKeyUp(KeyboardEventArgs e)
+    private static string TypeLabel(EquationType type) => type switch
     {
-        if (e.Key == "Enter")
-            Solve();
-    }
+        EquationType.Linear => "Linear equation",
+        EquationType.Quadratic => "Quadratic equation",
+        EquationType.Simultaneous => "Simultaneous equations",
+        _ => ""
+    };
 }

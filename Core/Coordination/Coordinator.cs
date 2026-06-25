@@ -5,7 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Core
+namespace Core.Coordination
 {
     public record SolveOutcome(EquationType Type, string Method, IReadOnlyList<SolutionStep> Steps);
 
