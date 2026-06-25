@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Core.Parsing
+namespace Core.Models
 {
     public enum TokenKind
     {

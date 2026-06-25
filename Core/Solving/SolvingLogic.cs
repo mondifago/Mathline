@@ -200,10 +200,10 @@ namespace Core.Solving
             double determinant = a1 * b2 - a2 * b1;
 
             var steps = new List<SolutionStep>
-    {
-        new("Equation 1", $"{FormatTwoVar(a1, b1)} = {c1}"),
-        new("Equation 2", $"{FormatTwoVar(a2, b2)} = {c2}")
-    };
+            {
+                new("Equation 1", $"{FormatTwoVar(a1, b1)} = {c1}"),
+                new("Equation 2", $"{FormatTwoVar(a2, b2)} = {c2}")
+            };
 
             if (determinant == 0)
             {
@@ -346,8 +346,6 @@ namespace Core.Solving
 
         private static string Signed(double v) =>
             v == 0 ? "" : v > 0 ? $" + {v}" : $" - {Math.Abs(v)}";
-
-
 
         #endregion
     }

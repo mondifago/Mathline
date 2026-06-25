@@ -1,5 +1,5 @@
 ﻿using Core;
-using Core.Parsing;
+using Core.Models;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -34,6 +34,33 @@ namespace Tests
         public void PropagatesParseErrors()
         {
             Assert.Throws<FormatException>(() => Coordinator.Solve("x + y = 5"));
+        }
+
+        [Fact]
+        public void RoutesSimultaneous()
+        {
+            var outcome = Coordinator.Solve("2x + y = 7\nx - y = 2");
+            Assert.Equal(EquationType.Simultaneous, outcome.Type);
+            Assert.Equal("Elimination", outcome.Method);
+        }
+
+        [Fact]
+        public void SimultaneousProducesSolutionStep()
+        {
+            var outcome = Coordinator.Solve("2x + y = 7\nx - y = 2");
+            Assert.Contains("x = 3, y = 1", outcome.Steps.Select(s => s.Expression));
+        }
+
+        [Fact]
+        public void ThreeEquationsRejected()
+        {
+            Assert.Throws<FormatException>(() => Coordinator.Solve("x = 1\ny = 2\nz = 3"));
+        }
+
+        [Fact]
+        public void EmptyInputRejected()
+        {
+            Assert.Throws<FormatException>(() => Coordinator.Solve("   "));
         }
     }
 }

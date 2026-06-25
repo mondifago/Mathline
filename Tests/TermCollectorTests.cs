@@ -1,4 +1,5 @@
-﻿using Core.Parsing;
+﻿using Core.Models;
+using Core.Parsing;
 using System;
 using System.Collections.Generic;
 using System.Text;

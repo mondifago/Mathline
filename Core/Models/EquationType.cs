@@ -2,11 +2,12 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Core.Parsing
+namespace Core.Models
 {
     public enum EquationType
     {
         Linear,
-        Quadratic
+        Quadratic,
+        Simultaneous
     }
 }
